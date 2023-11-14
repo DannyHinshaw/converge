@@ -13,7 +13,9 @@ import (
 	"github.com/dannyhinshaw/converge/gonverge"
 )
 
-var usageMessage = `Usage: converge [options] <source-directory> <destination-file>
+// getUsage returns the usage message for the command.
+func getUsage() string {
+	return `Usage: converge [options] <source-directory> <destination-file>
 
 Converges multiple Go source files into a single file. It scans the specified source directory for Go files, 
 merges their contents, and writes the result to the destination file.
@@ -40,6 +42,7 @@ Examples:
 
 Note:
   The tool does not merge files in subdirectories and ignores test files (_test.go).`
+}
 
 func main() {
 	var (
@@ -60,7 +63,7 @@ func main() {
 
 	// Custom usage message
 	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, usageMessage)
+		fmt.Fprintln(os.Stderr, getUsage())
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -73,7 +76,7 @@ func main() {
 
 	// TODO: Nuke this?
 	// Handle invalid arguments
-	//if flag.NArg() > 0 {
+	// if flag.NArg() > 0 {
 	//	flag.Usage()
 	//	log.Println("HEREEE????")
 	//	os.Exit(1)
@@ -98,7 +101,8 @@ func main() {
 	converger := gonverge.NewGoFileConverger(opts...)
 	command := cmd.NewCommand(converger, source, output)
 	if err := command.Run(ctx); err != nil {
-		log.Fatalf("Error: %v\n", err)
+		log.Printf("Error: %v\n", err)
+		return
 	}
 
 	log.Printf("Files from '%s' have been successfully merged into '%s'.\n", source, output)

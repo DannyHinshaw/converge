@@ -22,7 +22,7 @@ type GoFileConverger struct {
 // NewGoFileConverger creates a new GoFileConverger with sensible defaults.
 func NewGoFileConverger(opts ...Option) *GoFileConverger {
 	gfc := GoFileConverger{
-		MaxWorkers: runtime.NumCPU() * 2,
+		MaxWorkers: runtime.NumCPU(),
 	}
 
 	for _, opt := range opts {
@@ -48,11 +48,11 @@ func (gfc *GoFileConverger) ConvergeFiles(ctx context.Context, src string, w io.
 	// Start consumer goroutines
 	for i := 0; i < gfc.MaxWorkers; i++ {
 		wg.Add(1)
-		go func(n int) {
+		go func() {
 			defer wg.Done()
 			consumer := newFileConsumer(fpCh, resCh, errCh)
 			consumer.consume(ctx)
-		}(i)
+		}()
 	}
 
 	// Start producer goroutine

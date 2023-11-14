@@ -75,6 +75,8 @@ func (p *fileProcessor) process() (*goFile, error) {
 			p.state = procStateCoding
 		case p.importing():
 			res.addImport(line)
+		case p.coding():
+			res.appendCode(line)
 		default:
 			res.appendCode(line)
 		}
