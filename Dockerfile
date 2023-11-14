@@ -15,14 +15,14 @@ FROM golang:1.21.3-alpine3.18 as golang-builder
 FROM alpine-builder as gofumpt
 ARG GOFUMPT_VERSION
 RUN wget -nv -O /bin/gofumpt \
-    https://github.com/mvdan/gofumpt/releases/download/v$GOFUMPT_VERSION/gofumpt_v${GOFUMPT_VERSION}_linux_arm64 && \
+    https://github.com/mvdan/gofumpt/releases/download/$GOFUMPT_VERSION/gofumpt_${GOFUMPT_VERSION}_linux_arm64 && \
     chmod +x /bin/gofumpt
 
 # golangci-lint is used for Go code linting.
 FROM alpine-builder as golangci
 ARG GOLANGCI_LINT_VERSION
 RUN wget -nv -O - https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \
-    sh -s v$GOLANGCI_LINT_VERSION
+    sh -s $GOLANGCI_LINT_VERSION
 
 # pkgsite is used for generating the pkg.go.dev site.
 FROM golang-builder as pkgsite
