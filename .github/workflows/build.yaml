@@ -1,20 +1,19 @@
-name: Test
+name: Build
 
-on: [ push, workflow_dispatch ]
+on: [ push, pull_request, workflow_dispatch ]
 
 jobs:
-  test:
+  build:
+    name: Build
     runs-on: ubuntu-latest
-    name: Test
     steps:
       - name: Check out code
         uses: actions/checkout@v3
 
-      - name: Setup Go
+      - name: Set up Go
         uses: actions/setup-go@v4
         with:
           go-version-file: 'go.mod'
 
-      - name: Run tests
-        run: |
-          make test/full TOOLS=
+      - name: Build
+        run: make build

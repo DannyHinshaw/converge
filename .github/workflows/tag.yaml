@@ -1,4 +1,4 @@
-name: Tag to Release
+name: Release
 
 on:
   push:
@@ -9,8 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  create-release:
-    name: Create Release
+  release:
+    name: Release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code

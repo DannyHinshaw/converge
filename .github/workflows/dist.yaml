@@ -1,4 +1,4 @@
-name: Release Build
+name: Distribute
 
 on:
   release:
@@ -8,8 +8,8 @@ permissions:
   contents: write
 
 jobs:
-  build-and-upload:
-    name: Build/Upload Release Assets
+  distribute:
+    name: Distribute
     runs-on: ubuntu-latest
     strategy:
       matrix:
