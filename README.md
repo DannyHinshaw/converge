@@ -4,19 +4,18 @@
 
 # Converge
 
-Converge is a CLI tool for merging multiple Go source files into a single file. It's useful for simplifying package
-structures, easy sharing of Go code, and other scenarios where combining multiple Go files is desirable.
+Converge is a CLI tool designed for merging multiple Go source files into a single file. It provides a streamlined approach for consolidating Go package structures, simplifying code sharing, and other scenarios where amalgamating Go files is beneficial.
 
 ## Features
 
-- Merges multiple Go source files from a specified directory into a single file.
-- Supports exclusion of specific files.
-- Optional timeout for merge operation.
-- Configurable concurrency with a worker pool.
+- Efficiently merges multiple Go source files from a specified directory into a single consolidated file.
+- Allows exclusion of specific files from the merging process.
+- Supports an optional timeout setting for the merge operation.
+- Employs a configurable worker pool for enhanced concurrency management.
 
 ## Installation
 
-To install Converge, you need to have Go installed on your machine. You can then install it using the following command:
+To install Converge, ensure Go is installed on your machine. You can install Converge using the following command:
 
 ```bash
 go get github.com/dannyhinshaw/converge
@@ -24,26 +23,36 @@ go get github.com/dannyhinshaw/converge
 
 ## Usage
 
-To use Converge, run the following command:
+Run Converge with the command below, specifying the source directory and the output file:
 
 ```bash
-converge --src=<source-directory> --out=<output-file>
+converge <source-directory> --file=<output-file>
 ```
 
 ## Options
 
-    --src: Source directory containing Go files.
-    --out: Destination file for the merged output. Defaults to stdout if not specified.
-    --exclude: Comma-separated list of filenames to exclude from merging.
-    --timeout: Maximum time in seconds before cancelling the merge operation.
-    --workers: Maximum number of concurrent workers.
+    -f, --file  		Path to the output file where the merged content will be written;
+                        defaults to stdout if not specified.
+    -v               	Enable verbose logging for debugging purposes.
+    -h, --help       	Show this help message and exit.
+    --version     	    Show version information.
+    -t, --timeout       Maximum time (in seconds) before cancelling the merge operation;
+                        if not specified, the command runs until completion.
+    -w, --workers       Maximum number of concurrent workers in the worker pool.
+    -e, --exclude    	Comma-separated list of filenames to exclude from merging.
 
 ## Example
 
-Merging all Go files in the 'src' directory into 'merged.go':
+To merge all Go files in the 'src' directory into 'merged.go':
 
 ```bash
-converge --src=./src --out=./merged.go
+converge ./src --file=./merged.go
+```
+
+For more detailed usage instructions, refer to the tool's help message:
+
+```bash
+converge --help
 ```
 
 ## License
