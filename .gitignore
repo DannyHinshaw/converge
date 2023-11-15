@@ -7,3 +7,5 @@ bin/
 vendor/
 
 /tmp
+
+coverage.*

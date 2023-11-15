@@ -64,7 +64,6 @@ func (gfc *GoFileConverger) ConvergeFiles(ctx context.Context, src string, w io.
 	// This will cause the buildFile function to return.
 	go func() {
 		wg.Wait()
-		close(errCh)
 		close(resCh)
 	}()
 

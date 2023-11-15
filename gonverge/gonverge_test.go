@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	gonverge2 "github.com/dannyhinshaw/converge/gonverge"
+	"github.com/dannyhinshaw/converge/gonverge"
 )
 
 func TestGoFileConverger_ConvergeFiles(t *testing.T) {
@@ -15,6 +15,7 @@ func TestGoFileConverger_ConvergeFiles(t *testing.T) {
 	tests := map[string]struct {
 		setup    func() (string, func())
 		expected string
+		excludes []string
 		err      bool
 	}{
 		"EmptyDirectory": {
@@ -34,7 +35,45 @@ func TestGoFileConverger_ConvergeFiles(t *testing.T) {
 			expected: "package main\n\nfunc main() {}\n",
 			err:      false,
 		},
-		// Additional test cases here...
+		"MultipleFiles": {
+			setup: func() (string, func()) {
+				files := map[string]string{
+					"file1.go": "package main\nfunc func1() {}",
+					"file2.go": "package main\nfunc func2() {}",
+				}
+				dir := createTempDirWithFiles(t, files)
+				return dir, func() { os.RemoveAll(dir) }
+			},
+			expected: "package main\n\nfunc func1() {}\nfunc func2() {}\n",
+			err:      false,
+		},
+		"MultipleFilesWithExclusion": {
+			setup: func() (string, func()) {
+				files := map[string]string{
+					"file1.go":   "package main\nfunc func1() {}",
+					"file2.go":   "package main\nfunc func2() {}",
+					"exclude.go": "package main\nfunc exclude() {}",
+				}
+				dir := createTempDirWithFiles(t, files)
+				return dir, func() { os.RemoveAll(dir) }
+			},
+			expected: "package main\n\nfunc func1() {}\nfunc func2() {}\n",
+			excludes: []string{"exclude.go"},
+			err:      false,
+		},
+		"MultipleFilesWithExclusionButNoFile": {
+			setup: func() (string, func()) {
+				files := map[string]string{
+					"file1.go": "package main\nfunc func1() {}",
+					"file2.go": "package main\nfunc func2() {}",
+				}
+				dir := createTempDirWithFiles(t, files)
+				return dir, func() { os.RemoveAll(dir) }
+			},
+			expected: "package main\n\nfunc func1() {}\nfunc func2() {}\n",
+			excludes: []string{"exclude.go"},
+			err:      false,
+		},
 	}
 
 	for name, tc := range tests {
@@ -42,11 +81,15 @@ func TestGoFileConverger_ConvergeFiles(t *testing.T) {
 			dir, cleanup := tc.setup()
 			defer cleanup()
 
-			opts := []gonverge2.Option{
-				gonverge2.WithMaxWorkers(1),
+			opts := []gonverge.Option{
+				gonverge.WithMaxWorkers(1),
 			}
 
-			converger := gonverge2.NewGoFileConverger(opts...)
+			if len(tc.excludes) > 0 {
+				opts = append(opts, gonverge.WithExcludes(tc.excludes))
+			}
+
+			converger := gonverge.NewGoFileConverger(opts...)
 
 			var output bytes.Buffer
 			err := converger.ConvergeFiles(context.Background(), dir, &output)

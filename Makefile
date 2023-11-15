@@ -95,8 +95,8 @@ cli/build:
 	COMMIT=$$(git rev-parse --short HEAD) ; \
 	echo "Building with Date: $$DATE and Commit: $$COMMIT" ; \
 	go build -v -trimpath \
-		-ldflags="-X 'github.com/dannyhinshaw/converge.Date=$$DATE' \
-		-X 'github.com/dannyhinshaw/converge.Version=$$COMMIT'" \
+		-ldflags="-X 'main.BuildDate=$$DATE' \
+		-X 'main.Version=$$COMMIT'" \
 		-o bin/converge
 
 .PHONY: compose/build
@@ -170,6 +170,22 @@ test/race:
 ## runs all the tests with coverage and race detector enabled
 test/full:
 	$(CGOTEST) -v -race ./... -coverprofile=coverage.out -covermode=atomic
+
+
+################
+#   Release    #
+################
+
+.PHONY: release
+## Example usage: make release VERSION=v1.0.0
+release:
+	# Ensure a version is provided
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Error: VERSION is not set. Use make release VERSION=vx.y.z"; \
+		exit 1; \
+	fi
+	git tag $(VERSION)
+	git push origin $(VERSION)
 
 ################
 #     Halp     #

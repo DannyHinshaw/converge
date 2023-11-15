@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 // FileConverger is a type that can converge multiple files into one.
@@ -18,6 +19,8 @@ type FileConverger interface {
 // Converge holds all the dependencies for the converge command
 // and is used to validate, build, and run the command.
 type Converge struct {
+	mu sync.Mutex
+
 	// fc is the file converger to use.
 	fc FileConverger
 
@@ -30,20 +33,15 @@ type Converge struct {
 
 	// writer is the destination for the output.
 	writer io.Writer
-
-	// errCh is the channel used to synchronize
-	// the exit and return of concurrent validation
-	// functions (if an error occurs).
-	errCh chan error
 }
 
 // NewCommand returns a new Converge Converge.
-func NewCommand(fc FileConverger, src, dst string, opts ...Option) *Converge {
+func NewCommand(fc FileConverger, src string, opts ...Option) *Converge {
 	c := Converge{
 		fc:  fc,
 		src: src,
-		dst: dst,
 	}
+
 	for _, opt := range opts {
 		opt(&c)
 	}
@@ -73,6 +71,9 @@ func (c *Converge) Run(ctx context.Context) error {
 // It's important that build is ran before validate, because validate depends on the full path
 // to the source directory and destination file (if supplied).
 func (c *Converge) build() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	var err error
 	if c.src, err = filepath.Abs(c.src); err != nil {
 		return fmt.Errorf("failed to get absolute path to source directory %s: %w", c.src, err)
@@ -80,11 +81,11 @@ func (c *Converge) build() error {
 
 	// No dest file or writer supplied,
 	// just default to os.Stdout.
+	if c.writer == nil {
+		c.writer = os.Stdout
+	}
 	if c.dst == "" {
-		if c.writer == nil {
-			c.writer = os.Stdout
-			return nil
-		}
+		return nil
 	}
 
 	// Destination file supplied, so we'll need the
@@ -104,31 +105,24 @@ func (c *Converge) build() error {
 // arguments are for objects that actually exist on the users system before kicking
 // off the full-blown converge operation.
 func (c *Converge) validate() error {
-	vs := []struct {
-		fn  func(string)
-		arg string
-	}{
-		{fn: c.validateSrcDir, arg: c.src},
-		{fn: c.validateDstFile, arg: c.dst},
-	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	// Set up a buffered channel to receive errors,
-	// the buffer size is the number of validation
-	// functions we have so none of them block.
-	c.errCh = make(chan error, len(vs))
+	errCh := make(chan error)
 
-	// Iterate over the validation functions and
-	// kick each off in their own goroutine.
-	for _, v := range vs {
-		go v.fn(v.arg)
-	}
-
-	// Wait for errors to come in...
-	for i := 0; i < len(vs); i++ {
-		err := <-c.errCh
-		if err != nil {
-			return err
+	go func() {
+		defer close(errCh)
+		if err := validateSrcDir(c.src); err != nil {
+			errCh <- err
+			return
 		}
+		if err := validateDstFile(c.dst); err != nil {
+			errCh <- err
+		}
+	}()
+
+	if err, ok := <-errCh; ok {
+		return err
 	}
 
 	return nil
@@ -136,27 +130,27 @@ func (c *Converge) validate() error {
 
 // validateSrcDir makes sure that the source directory exists, is a directory,
 // and that we have permission to read from it.
-func (c *Converge) validateSrcDir(src string) {
+func validateSrcDir(src string) error {
 	switch srcInfo, err := os.Stat(src); {
 	case err != nil && !os.IsNotExist(err):
-		c.errCh <- fmt.Errorf("failed to access source %s: %w", c.src, err)
+		return fmt.Errorf("failed to access source %s: %w", src, err)
 	case err == nil && !srcInfo.IsDir():
-		c.errCh <- fmt.Errorf("source %s is not a directory", c.src)
+		return fmt.Errorf("source %s is not a directory", src)
 	default:
-		c.errCh <- nil
+		return nil
 	}
 }
 
 // validateDstFile makes sure that if the destination file already exists;
 // it is not a directory, and we have permission to write to it.
-func (c *Converge) validateDstFile(dst string) {
+func validateDstFile(dst string) error {
 	switch dstInfo, err := os.Stat(dst); {
 	case err != nil && !os.IsNotExist(err):
-		c.errCh <- fmt.Errorf("failed to access destination file %s: %w", c.dst, err)
+		return fmt.Errorf("failed to access destination file %s: %w", dst, err)
 	case err == nil && dstInfo.IsDir():
-		c.errCh <- fmt.Errorf("destination file %s is a directory", c.dst)
+		return fmt.Errorf("destination file %s is a directory", dst)
 	default:
-		c.errCh <- nil
+		return nil
 	}
 }
 
@@ -167,5 +161,12 @@ type Option func(*Converge)
 func WithWriter(w io.Writer) Option {
 	return func(c *Converge) {
 		c.writer = w
+	}
+}
+
+// WithDstFile sets the destination file to use for the output.
+func WithDstFile(dst string) Option {
+	return func(c *Converge) {
+		c.dst = dst
 	}
 }

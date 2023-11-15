@@ -10,9 +10,9 @@ func WithMaxWorkers(maxWorkers int) Option {
 	}
 }
 
-// WithExcludeList sets the list of files to exclude from merging.
-func WithExcludeList(excludeList []string) Option {
+// WithExcludes sets the list of files to exclude from merging.
+func WithExcludes(excludes []string) Option {
 	return func(gfc *GoFileConverger) {
-		gfc.Excludes = excludeList
+		gfc.Excludes = excludes
 	}
 }
