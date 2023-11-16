@@ -17,6 +17,5 @@ jobs:
 
       - name: Release
         uses: softprops/action-gh-release@v1
-
-      - name: Distribute
-        uses: ./.github/workflows/dist.yaml
+  distribute:
+    uses: ./.github/workflows/dist.yaml
