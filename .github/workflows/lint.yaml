@@ -14,7 +14,7 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v3
 
-      - name: Read `.env` file
+      - name: Read .env file
         id: dotenv
         uses: falti/dotenv-action@v1.0.4
 
