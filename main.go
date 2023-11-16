@@ -17,37 +17,37 @@ import (
 func getUsage() string {
 	return `
 
-			┏┏┓┏┓┓┏┏┓┏┓┏┓┏┓
-			┗┗┛┛┗┗┛┗ ┛ ┗┫┗ 
-    		        	┛
+	    ┏┏┓┏┓┓┏┏┓┏┓┏┓┏┓
+	    ┗┗┛┛┗┗┛┗ ┛ ┗┫┗
+               	┛
 
 Usage: converge <source-directory> [options]
 
 Converge multiple files in a Go package into one.
 
 Arguments:
-  <source-directory>   Path to the directory containing Go source files to be merged.
+	<source-directory>   Path to the directory containing Go source files to be merged.
 
 Options:
-  -f, --file  		Path to the output file where the merged content will be written; 
-					defaults to stdout if not specified.
-  -v               	Enable verbose logging for debugging purposes.
-  -h, --help       	Show this help message and exit.
-  --version     	Show version information.
-  -t, --timeout     Maximum time (in seconds) before cancelling the merge operation; 
-					if not specified, the command runs until completion.
-  -w, --workers     Maximum number of concurrent workers in the worker pool.
-  -e, --exclude    	Comma-separated list of filenames to exclude from merging.
+	-f, --file           Path to the output file where the merged content will be written;
+	                     defaults to stdout if not specified.
+	-v                   Enable verbose logging for debugging purposes.
+	-h, --help           Show this help message and exit.
+	--version            Show version information.
+	-t, --timeout        Maximum time (in seconds) before cancelling the merge operation;
+	                     if not specified, the command runs until completion.
+	-w, --workers        Maximum number of concurrent workers in the worker pool.
+	-e, --exclude        Comma-separated list of filenames to exclude from merging.
 
 Examples:
-  converge ./src ./merged.go                                Merge all Go files in the 'src' directory into 'merged.go'.
-  converge -v ./src ./merged.go                      		Merge with verbose logging enabled.
-  converge -t 60 ./src ./merged.go                          Merge with a timeout of 60 seconds.
-  converge -w 4 ./src ./merged.go                           Merge using a maximum of 4 workers.
-  converge -e "file1.go,file2.go" ./src ./merged.go         Merge while excluding 'file1.go' and 'file2.go'.
+	converge ./src ./merged.go                                Merge all Go files in the 'src' directory into 'merged.go'.
+    converge -v ./src ./merged.go                             Merge with verbose logging enabled.
+    converge -t 60 ./src ./merged.go                          Merge with a timeout of 60 seconds.
+    converge -w 4 ./src ./merged.go                           Merge using a maximum of 4 workers.
+    converge -e "file1.go,file2.go" ./src ./merged.go         Merge while excluding 'file1.go' and 'file2.go'.
 
 Note:
-  The tool does not merge files in subdirectories and ignores test files (_test.go).`
+	The tool does not merge files in subdirectories and ignores test files (_test.go).`
 }
 
 func main() {
