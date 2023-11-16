@@ -1,14 +1,10 @@
 name: Distribute
 
 on:
-  workflow_run:
-    workflows: [ Release ]
-    types: [ completed ]
-  workflow_dispatch:
-
-permissions:
-  contents: write
-  packages: write
+  workflow_call:
+    permissions:
+      contents: write
+      packages: write
 
 jobs:
   distribute:
@@ -32,5 +28,6 @@ jobs:
           goos: ${{ matrix.goos }}
           goarch: ${{ matrix.goarch }}
           goversion: ${{ matrix.goversion }}
+          release_tag: ${{ github.ref_name }}
           build_command: make build/cli
           extra_files: bin/converge

@@ -17,3 +17,6 @@ jobs:
 
       - name: Release
         uses: softprops/action-gh-release@v1
+
+      - name: Distribute
+        uses: github.com/dannyhinshaw/converge/.github/workflows/dist.yaml@main
