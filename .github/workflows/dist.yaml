@@ -3,10 +3,6 @@ name: Distribute
 on:
   workflow_call:
 
-permissions:
-  contents: write
-  packages: write
-
 jobs:
   distribute:
     name: Distribute
