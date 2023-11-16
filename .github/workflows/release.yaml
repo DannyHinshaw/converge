@@ -19,4 +19,4 @@ jobs:
         uses: softprops/action-gh-release@v1
 
       - name: Distribute
-        uses: dannyhinshaw/converge/.github/workflows/dist.yaml@main
+        uses: ./.github/workflows/dist.yaml@main
