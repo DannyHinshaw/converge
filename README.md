@@ -40,15 +40,15 @@ converge <source-directory> --file=<output-file>
 
 ## Options
 
-    -f, --file  		Path to the output file where the merged content will be written;
+    -f, --file          Path to the output file where the merged content will be written;
                         defaults to stdout if not specified.
-    -v               	Enable verbose logging for debugging purposes.
-    -h, --help       	Show this help message and exit.
-    --version     	    Show version information.
+    -v                  Enable verbose logging for debugging purposes.
+    -h, --help          Show this help message and exit.
+    --version           Show version information.
     -t, --timeout       Maximum time (in seconds) before cancelling the merge operation;
                         if not specified, the command runs until completion.
     -w, --workers       Maximum number of concurrent workers in the worker pool.
-    -e, --exclude    	Comma-separated list of filenames to exclude from merging.
+    -e, --exclude       Comma-separated list of filenames to exclude from merging.
 
 ## Example
 
