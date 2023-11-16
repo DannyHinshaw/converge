@@ -84,12 +84,12 @@ deps:
 
 .PHONY: build
 ## builds all binaries/images
-build: cli/build compose/build
-	@echo "Make: building binaries..."
+build: build/cli build/compose
+	@echo "Make: building binaries and resources..."
 
 .PHONY: cli/build
 ## builds the converge CLI binary
-cli/build:
+build/cli:
 	@mkdir -p bin
 	@DATE=$$(date -u +"%Y-%m-%dT%H:%M:%SZ") ; \
 	COMMIT=$$(git rev-parse --short HEAD) ; \
@@ -99,9 +99,9 @@ cli/build:
 		-X 'main.Version=$$COMMIT'" \
 		-o bin/converge
 
-.PHONY: compose/build
+.PHONY: build/compose
 ## builds resources
-compose/build: deps
+build/compose: deps
 	$(COMPOSE) build --no-cache
 
 .PHONY: compose/clean
