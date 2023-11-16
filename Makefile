@@ -177,7 +177,7 @@ test/full:
 ################
 
 .PHONY: release
-## Example usage: make release VERSION=v1.0.0
+## Issues a new release with git tag. Example usage: make release VERSION=v1.0.0
 release:
 	# Ensure a version is provided
 	@if [ -z "$(VERSION)" ]; then \
