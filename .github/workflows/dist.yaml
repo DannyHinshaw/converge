@@ -33,5 +33,4 @@ jobs:
           goarch: ${{ matrix.goarch }}
           goversion: ${{ matrix.goversion }}
           build_command: make build/cli
-        env:
-          BUILD_DIR: "."
+          extra_files: bin/converge
