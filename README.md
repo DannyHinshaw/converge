@@ -1,12 +1,12 @@
-
 ![Build](https://github.com/dannyhinshaw/converge/actions/workflows/build.yaml/badge.svg)
 ![Lint](https://github.com/dannyhinshaw/converge/actions/workflows/lint.yaml/badge.svg)
 ![Test](https://github.com/dannyhinshaw/converge/actions/workflows/test.yaml/badge.svg)
 
-
 # Converge
 
-Converge is a CLI tool designed for merging multiple Go source files into a single file. It provides a streamlined approach for consolidating Go package structures, simplifying code sharing, and other scenarios where amalgamating Go files is beneficial.
+Converge is a CLI tool designed for merging multiple Go source files into a single file. It provides a streamlined
+approach for consolidating Go package structures, simplifying code sharing, and other scenarios where amalgamating Go
+files is beneficial.
 
 ## Features
 
@@ -17,15 +17,22 @@ Converge is a CLI tool designed for merging multiple Go source files into a sing
 
 ## Installation
 
-To install Converge, ensure Go is installed on your machine. You can install Converge using the following command:
+To install Converge, ensure Go is installed on your machine.
 
 ```bash
-go get github.com/dannyhinshaw/converge
+which go
+```
+
+You can install Converge using the following command:
+
+```bash
+go install github.com/dannyhinshaw/converge
 ```
 
 ## Usage
 
-Run Converge with the command below, specifying the source directory and the output file:
+Run Converge with the command below, specifying the source directory
+and (optionally) the output file:
 
 ```bash
 converge <source-directory> --file=<output-file>
@@ -49,6 +56,12 @@ To merge all Go files in the 'src' directory into 'merged.go':
 
 ```bash
 converge ./src --file=./merged.go
+```
+
+To merge all Go files in the 'src' directory and pipe to clipboard:
+
+```bash
+converge ./src | pbcopy
 ```
 
 For more detailed usage instructions, refer to the tool's help message:
