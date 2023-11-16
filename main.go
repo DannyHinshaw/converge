@@ -11,6 +11,7 @@ import (
 
 	"github.com/dannyhinshaw/converge/cmd"
 	"github.com/dannyhinshaw/converge/gonverge"
+	"github.com/dannyhinshaw/converge/internal/version"
 )
 
 // getUsage returns the usage message for the command.
@@ -19,7 +20,7 @@ func getUsage() string {
 
 	    ┏┏┓┏┓┓┏┏┓┏┓┏┓┏┓
 	    ┗┗┛┛┗┗┛┗ ┛ ┗┫┗
-               	┛
+               	    ┛
 
 Usage: converge <source-directory> [options]
 
@@ -52,12 +53,12 @@ Note:
 
 func main() {
 	var (
-		outFile string
-		exclude string
-		workers int
-		timeout int
-		verbose bool
-		version bool
+		outFile     string
+		exclude     string
+		workers     int
+		timeout     int
+		verboseLog  bool
+		showVersion bool
 	)
 
 	// outFile flag (short and long version)
@@ -77,10 +78,10 @@ func main() {
 	flag.IntVar(&timeout, "timeout", 0, "")
 
 	// Verbose flag (short version only)
-	flag.BoolVar(&verbose, "v", false, "Enable verbose logging")
+	flag.BoolVar(&verboseLog, "v", false, "Enable verbose logging")
 
 	// Version flag (long version only)
-	flag.BoolVar(&version, "version", false, "Show version information and exit")
+	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
 
 	// Custom usage message
 	flag.Usage = func() {
@@ -91,13 +92,13 @@ func main() {
 	flag.Parse()
 
 	// Handle version flag
-	if version {
-		log.Printf("Converge version: %s, Build date: %s\n", Version, BuildDate)
+	if showVersion {
+		fmt.Println("converge version:", version.GetVersion()) //nolint:forbidigo // only want to print version
 		return
 	}
 
 	// Verbose logging
-	if verbose {
+	if verboseLog {
 		log.SetFlags(0)
 		log.Println("Verbose logging enabled")
 	}

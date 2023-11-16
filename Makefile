@@ -87,17 +87,11 @@ deps:
 build: build/cli build/compose
 	@echo "Make: building binaries and resources..."
 
-.PHONY: cli/build
+.PHONY: build/cli
 ## builds the converge CLI binary
 build/cli:
 	@mkdir -p bin
-	@DATE=$$(date -u +"%Y-%m-%dT%H:%M:%SZ") ; \
-	COMMIT=$$(git rev-parse --short HEAD) ; \
-	echo "Building with Date: $$DATE and Commit: $$COMMIT" ; \
-	go build -v -trimpath \
-		-ldflags="-X 'main.BuildDate=$$DATE' \
-		-X 'main.Version=$$COMMIT'" \
-		-o bin/converge
+	go build -v -trimpath -o bin/converge
 
 .PHONY: build/compose
 ## builds resources
