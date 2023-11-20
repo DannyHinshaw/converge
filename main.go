@@ -18,8 +18,8 @@ import (
 func getUsage() string {
 	return `
 
-	    ┏┏┓┏┓┓┏┏┓┏┓┏┓┏┓
-	    ┗┗┛┛┗┗┛┗ ┛ ┗┫┗
+        ┏┏┓┏┓┓┏┏┓┏┓┏┓┏┓
+        ┗┗┛┛┗┗┛┗ ┛ ┗┫┗
                	    ┛
 
 Usage: converge <source-directory> [options]
@@ -41,7 +41,7 @@ Options:
 	-e, --exclude        Comma-separated list of filenames to exclude from merging.
 
 Examples:
-	converge ./src ./merged.go                                Merge all Go files in the 'src' directory into 'merged.go'.
+    converge ./src ./merged.go                                Merge all Go files in the 'src' directory into 'merged.go'
     converge -v ./src ./merged.go                             Merge with verbose logging enabled.
     converge -t 60 ./src ./merged.go                          Merge with a timeout of 60 seconds.
     converge -w 4 ./src ./merged.go                           Merge using a maximum of 4 workers.
