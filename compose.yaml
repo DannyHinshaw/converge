@@ -1,0 +1,26 @@
+services:
+  tools:
+    container_name: tools
+    image: img/tools:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        ALPINE_IMAGE_VERSION: $ALPINE_IMAGE_VERSION
+        GOLANG_IMAGE_VERSION: $GOLANG_IMAGE_VERSION
+        GOFUMPT_VERSION: $GOFUMPT_VERSION
+        GOLANGCI_LINT_VERSION: $GOLANGCI_LINT_VERSION
+        PKGSITE_VERSION: $PKGSITE_VERSION
+    ports:
+      - "3030:3030"
+    volumes:
+      - ./:/workspace
+      - go-cache:/go/.cache
+      - $GOPATH/pkg/mod:/go/pkg/mod
+
+volumes:
+  go-cache:
+
+networks:
+  tools:
+    internal: true

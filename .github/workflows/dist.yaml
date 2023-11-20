@@ -1,0 +1,30 @@
+name: Distribute
+
+on:
+  workflow_call:
+
+jobs:
+  distribute:
+    name: Distribute
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [ linux, windows, darwin ]
+        goarch: [ 386, amd64, arm64 ]
+        goversion: [ "go.mod" ]
+        exclude:
+          - goarch: "386"
+            goos: darwin
+          - goarch: arm64
+            goos: windows
+    steps:
+      - uses: actions/checkout@v3
+      - uses: wangyoucao577/go-release-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          goos: ${{ matrix.goos }}
+          goarch: ${{ matrix.goarch }}
+          goversion: ${{ matrix.goversion }}
+          release_tag: ${{ github.ref_name }}
+          build_command: make build/cli
+          extra_files: bin/converge
