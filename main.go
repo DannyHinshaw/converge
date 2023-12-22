@@ -10,136 +10,94 @@ import (
 	"time"
 
 	"github.com/dannyhinshaw/converge/cmd"
-	"github.com/dannyhinshaw/converge/gonverge"
-	"github.com/dannyhinshaw/converge/internal/version"
+	"github.com/dannyhinshaw/converge/internal/cli"
+	"github.com/dannyhinshaw/converge/internal/gonverge"
+	"github.com/dannyhinshaw/converge/internal/logger"
 )
 
-// getUsage returns the usage message for the command.
-func getUsage() string {
-	return `
-
-        ┏┏┓┏┓┓┏┏┓┏┓┏┓┏┓
-        ┗┗┛┛┗┗┛┗ ┛ ┗┫┗
-               	    ┛
-
-Usage: converge <source-directory> [options]
-
-Converge multiple files in a Go package into one.
-
-Arguments:
-	<source-directory>   Path to the directory containing Go source files to be merged.
-
-Options:
-	-f, --file           Path to the output file where the merged content will be written;
-	                     defaults to stdout if not specified.
-	-v                   Enable verbose logging for debugging purposes.
-	-h, --help           Show this help message and exit.
-	--version            Show version information.
-	-t, --timeout        Maximum time (in seconds) before cancelling the merge operation;
-	                     if not specified, the command runs until completion.
-	-w, --workers        Maximum number of concurrent workers in the worker pool.
-	-e, --exclude        Comma-separated list of filenames to exclude from merging.
-
-Examples:
-    converge ./src ./merged.go                                Merge all Go files in the 'src' directory into 'merged.go'
-    converge -v ./src ./merged.go                             Merge with verbose logging enabled.
-    converge -t 60 ./src ./merged.go                          Merge with a timeout of 60 seconds.
-    converge -w 4 ./src ./merged.go                           Merge using a maximum of 4 workers.
-    converge -e "file1.go,file2.go" ./src ./merged.go         Merge while excluding 'file1.go' and 'file2.go'.
-
-Note:
-	The tool does not merge files in subdirectories and ignores test files (_test.go).`
-}
+// versions is set by the linker at build time.
+// Defaults to "(dev)" if not set.
+var version = "(dev)"
 
 func main() {
-	var (
-		outFile     string
-		exclude     string
-		workers     int
-		timeout     int
-		verboseLog  bool
-		showVersion bool
-	)
-
-	// outFile flag (short and long version)
-	flag.StringVar(&outFile, "f", "", "Output file for merged content; defaults to stdout if not specified")
-	flag.StringVar(&outFile, "file", "", "")
-
-	// exclude flag (short and long version)
-	flag.StringVar(&exclude, "e", "", "Comma-separated list of files to exclude from merging")
-	flag.StringVar(&exclude, "exclude", "", "")
-
-	// workers flag (short and long version)
-	flag.IntVar(&workers, "w", 0, "Maximum number of workers to use for file processing")
-	flag.IntVar(&workers, "workers", 0, "")
-
-	// timeout flag (short and long version)
-	flag.IntVar(&timeout, "t", 0, "Maximum time in seconds before cancelling the operation")
-	flag.IntVar(&timeout, "timeout", 0, "")
-
-	// Verbose flag (short version only)
-	flag.BoolVar(&verboseLog, "v", false, "Enable verbose logging")
-
-	// Version flag (long version only)
-	flag.BoolVar(&showVersion, "version", false, "Show version information and exit")
-
-	// Custom usage message
-	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, getUsage())
-		flag.PrintDefaults()
-	}
-
-	flag.Parse()
+	app := cli.NewApp()
 
 	// Handle version flag
-	if showVersion {
-		fmt.Println("converge version:", version.GetVersion()) //nolint:forbidigo // only want to print version
+	if app.ShowVersion {
+		fmt.Println("converge version:", version) //nolint:forbidigo // not debugging
 		return
 	}
 
-	// Verbose logging
-	if verboseLog {
-		log.SetFlags(0)
-		log.Println("Verbose logging enabled")
+	// Create logger and set verbose logging.
+	clog := logger.New("converge", logger.WithVerbose(app.VerboseLog))
+	if app.VerboseLog {
+		clog.Debug("Verbose logging enabled")
 	}
 
-	// Check for at least one positional argument (source directory)
-	if flag.NArg() < 1 {
-		log.Println("Error: Source directory is required.")
+	srcDir, err := app.ParseSrcDir()
+	if err != nil {
+		clog.Error(err.Error())
 		flag.Usage()
 		os.Exit(1)
 	}
-	source := flag.Arg(0) // First positional argument
 
-	// Create context to handle timeouts
-	t := time.Duration(timeout) * time.Second
-	ctx, cancel := newCancelContext(context.Background(), t)
+	var (
+		converger   = createConverger(clog, app.Workers, app.Packages, app.Exclude)
+		command     = createCommand(converger, srcDir, app.OutFile)
+		ctx, cancel = newCancelContext(context.Background(), app.Timeout)
+	)
 	defer cancel()
 
-	// Build options for the converger
-	var gonvOpts []gonverge.Option
-	if workers > 0 {
-		gonvOpts = append(gonvOpts, gonverge.WithMaxWorkers(workers))
+	if err = command.Run(ctx); err != nil {
+		log.Printf("Error: %v\n", err)
+		return
 	}
-	if exclude != "" {
-		excludeFiles := strings.Split(exclude, ",")
-		gonvOpts = append(gonvOpts, gonverge.WithExcludes(excludeFiles))
-	}
-	converger := gonverge.NewGoFileConverger(gonvOpts...)
 
-	// Build options for the command
+	if app.OutFile != "" {
+		log.Printf("Files from '%s' have been successfully merged into '%s'.\n", srcDir, app.OutFile)
+	}
+}
+
+// createCommand creates a new Converge command with the given options.
+func createCommand(converger cmd.FileConverger, src, outFile string) *cmd.Converge {
 	var cmdOpts []cmd.Option
 	if outFile != "" {
 		cmdOpts = append(cmdOpts, cmd.WithDstFile(outFile))
 	}
 
-	command := cmd.NewCommand(converger, source, cmdOpts...)
-	if err := command.Run(ctx); err != nil {
-		log.Printf("Error: %v\n", err)
-		return
+	return cmd.NewCommand(converger, src, cmdOpts...)
+}
+
+// createConverger creates a new GoFileConverger with the given options.
+func createConverger(ll logger.LevelLogger, workers int, packages, exclude string) *gonverge.GoFileConverger {
+	var gonvOpts []gonverge.Option
+	if ll != nil {
+		gonvOpts = append(gonvOpts, gonverge.WithLogger(ll))
 	}
 
-	log.Printf("Files from '%s' have been successfully merged into '%s'.\n", source, outFile)
+	if workers > 0 {
+		gonvOpts = append(gonvOpts, gonverge.WithMaxWorkers(workers))
+	}
+
+	if packages != "" {
+		var pkgs []string
+		for _, pkg := range strings.Split(packages, ",") {
+			pkgs = append(pkgs, strings.TrimSpace(pkg))
+		}
+
+		gonvOpts = append(gonvOpts, gonverge.WithPackages(pkgs))
+	}
+
+	if exclude != "" {
+		var excludeFiles []string
+		for _, excludeFile := range strings.Split(exclude, ",") {
+			excludeFiles = append(excludeFiles, strings.TrimSpace(excludeFile))
+		}
+
+		gonvOpts = append(gonvOpts, gonverge.WithExcludes(excludeFiles))
+	}
+
+	return gonverge.NewGoFileConverger(gonvOpts...)
 }
 
 // newCancelContext returns a new cancellable context
@@ -147,9 +105,10 @@ func main() {
 //
 // If no timeout is specified, the context will not have a
 // timeout, but a cancel function will still be returned.
-func newCancelContext(ctx context.Context, t time.Duration) (context.Context, context.CancelFunc) {
-	if t > 0 {
-		return context.WithTimeout(ctx, t)
+func newCancelContext(ctx context.Context, timeout int) (context.Context, context.CancelFunc) {
+	if timeout > 0 {
+		return context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 	}
+
 	return context.WithCancel(ctx)
 }

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/dannyhinshaw/converge/cmd"
-	"github.com/dannyhinshaw/converge/gonverge"
+	"github.com/dannyhinshaw/converge/internal/gonverge"
 )
 
 func TestConverge_Run(t *testing.T) {

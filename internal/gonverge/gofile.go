@@ -84,7 +84,8 @@ func (f *goFile) FormatCode() ([]byte, error) {
 	builder.WriteString(f.pkgName)
 	builder.WriteString("\n\n")
 	if len(f.imports) > 0 {
-		builder.WriteString(f.buildImports())
+		imports := f.buildImports()
+		builder.WriteString(imports)
 	}
 	builder.WriteString(f.code.String())
 

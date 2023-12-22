@@ -6,6 +6,8 @@ import (
 	"io"
 	"runtime"
 	"sync"
+
+	"github.com/dannyhinshaw/converge/internal/logger"
 )
 
 // GoFileConverger is a struct that converges multiple Go files into one.
@@ -15,14 +17,23 @@ type GoFileConverger struct {
 	// process all files in the given directory.
 	MaxWorkers int
 
+	// Packages is a list of packages to include in the output.
+	// If empty, converger will default to top-level NON-TEST
+	// package in the given directory.
+	Packages []string
+
 	// Excludes is a list of files to exclude from merging.
 	Excludes []string
+
+	// Logger is the logger to use for logging.
+	Logger logger.LevelLogger
 }
 
 // NewGoFileConverger creates a new GoFileConverger with sensible defaults.
 func NewGoFileConverger(opts ...Option) *GoFileConverger {
 	gfc := GoFileConverger{
 		MaxWorkers: runtime.NumCPU(),
+		Logger:     &logger.NoopLogger{},
 	}
 
 	for _, opt := range opts {
@@ -35,17 +46,15 @@ func NewGoFileConverger(opts ...Option) *GoFileConverger {
 // ConvergeFiles converges all Go files in the given directory and
 // package into one and writes the result to the given output.
 func (gfc *GoFileConverger) ConvergeFiles(ctx context.Context, src string, w io.Writer) error {
-	// Create channels, filePathsCh is buffered so consumers
-	// can finish processing their files after the producer
+	// fpCh is buffered so consumers can finish
+	// processing their files after the producer
 	// has closed the channel.
-	// Instead, consumers listen to the errorsCh, so they can
-	// stop processing if an error occurs.
 	fpCh := make(chan string, gfc.MaxWorkers)
 	resCh := make(chan *goFile)
 	errCh := make(chan error)
 	var wg sync.WaitGroup
 
-	// Start consumer goroutines
+	// Start consumer worker pool
 	for i := 0; i < gfc.MaxWorkers; i++ {
 		wg.Add(1)
 		go func() {
@@ -55,8 +64,8 @@ func (gfc *GoFileConverger) ConvergeFiles(ctx context.Context, src string, w io.
 		}()
 	}
 
-	// Start producer goroutine
-	producer := newFileProducer(gfc.Excludes, fpCh, errCh)
+	// Setup and start producer
+	producer := newFileProducer(gfc.Logger, gfc.Excludes, gfc.Packages, fpCh, errCh)
 	go producer.produce(src)
 
 	// Wait for all consumers to finish
@@ -89,11 +98,7 @@ func (gfc *GoFileConverger) ConvergeFiles(ctx context.Context, src string, w io.
 }
 
 // buildFile handles running the converger and returning the result or an error.
-func (gfc *GoFileConverger) buildFile(
-	ctx context.Context,
-	errCh <-chan error,
-	resCh <-chan *goFile,
-) (*goFile, error) {
+func (gfc *GoFileConverger) buildFile(ctx context.Context, errCh <-chan error, resCh <-chan *goFile) (*goFile, error) {
 	gf := newGoFile()
 	for {
 		select {
