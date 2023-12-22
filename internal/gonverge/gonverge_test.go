@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/dannyhinshaw/converge/gonverge"
+	"github.com/dannyhinshaw/converge/internal/gonverge"
 )
 
 func TestGoFileConverger_ConvergeFiles(t *testing.T) {
@@ -104,6 +104,7 @@ func TestGoFileConverger_ConvergeFiles(t *testing.T) {
 	}
 }
 
+// createTempDirWithFiles creates a temporary directory with the given files for testing.
 func createTempDirWithFiles(t *testing.T, files map[string]string) string {
 	t.Helper()
 	dir, err := os.MkdirTemp("", "gonverge_test")

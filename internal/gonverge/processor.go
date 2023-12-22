@@ -24,14 +24,17 @@ const (
 	// tokenPkgDecl is the token for a package declaration line.
 	tokenPkgDecl string = `package `
 
+	// tokenImport is the token for import declarations.
+	tokenImport = `import`
+
+	// tokenImportMono is the token for a single import line.
+	tokenImportMono = tokenImport + ` "`
+
 	// tokenImportMulti is the token that starts an import block.
-	tokenImportMultiStart = `import (`
+	tokenImportMultiStart = tokenImport + ` (`
 
 	// tokenImportMultiEnd is the token that ends an import block.
 	tokenImportMultiFinish = `)`
-
-	// tokenImportMono is the token for a single import line.
-	tokenImportMono = `import "`
 )
 
 // fileProcessor holds the *os.File representations
@@ -70,10 +73,13 @@ func (p *fileProcessor) process() (*goFile, error) {
 		case strings.HasPrefix(line, tokenImportMultiStart):
 			p.state = procStateImporting
 		case strings.HasPrefix(line, tokenImportMono):
-			res.addImport(strings.TrimPrefix(line, tokenImportMono))
+			res.addImport(strings.TrimPrefix(line, tokenImport))
 		case p.importing() && strings.HasSuffix(line, tokenImportMultiFinish):
 			p.state = procStateCoding
 		case p.importing():
+			if line == "" {
+				continue
+			}
 			res.addImport(line)
 		case p.coding():
 			res.appendCode(line)

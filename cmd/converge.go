@@ -93,7 +93,6 @@ func (c *Converge) build() error {
 	if c.dst, err = filepath.Abs(c.dst); err != nil {
 		return fmt.Errorf("failed to get absolute path to destination file %s: %w", c.dst, err)
 	}
-
 	if c.writer, err = os.Create(c.dst); err != nil {
 		return fmt.Errorf("failed to create destination file %s: %w", c.dst, err)
 	}
@@ -151,22 +150,5 @@ func validateDstFile(dst string) error {
 		return fmt.Errorf("destination file %s is a directory", dst)
 	default:
 		return nil
-	}
-}
-
-// Option is a function that configures a Converge.
-type Option func(*Converge)
-
-// WithWriter sets the writer to use for the output.
-func WithWriter(w io.Writer) Option {
-	return func(c *Converge) {
-		c.writer = w
-	}
-}
-
-// WithDstFile sets the destination file to use for the output.
-func WithDstFile(dst string) Option {
-	return func(c *Converge) {
-		c.dst = dst
 	}
 }

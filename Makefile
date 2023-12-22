@@ -19,6 +19,11 @@ COMPOSE = docker compose
 # at play with developer machines to ensure consistency across all engineering.
 TOOLS ?= $(COMPOSE) run --rm --service-ports tools
 
+# CGO contains the base Docker Compose command for
+# running various Go tools in the tools Compose service
+# as ephemeral containers with CGO_ENABLED=1.
+CGO ?= $(COMPOSE) run --rm --service-ports -e CGO_ENABLED=1 tools go
+
 # GOFUMPT contains the base Go command for running gofumpt
 # defaulting to running it in the tools container.
 GOFUMPT ?= $(TOOLS) gofumpt
@@ -37,10 +42,6 @@ PKGSITE := $(TOOLS) pkgsite
 # environment variable or by setting the TOOLS
 # environment variable to an empty string.
 GO ?= $(TOOLS) go
-
-# CGO contains the base Go command for running go with CGO_ENABLED=1
-# and running it in the tools container by default.
-CGO ?= $(TOOLS) CGO_ENABLED=1 go
 
 # GOTEST contains the base Go command for running tests.
 # It can be overridden by setting the GOTEST environment variable.
@@ -91,7 +92,9 @@ build: build/cli build/compose
 ## builds the converge CLI binary
 build/cli:
 	@mkdir -p bin
-	go build -v -trimpath -o bin/converge
+	@VERSION=$$(git describe --tags --always || echo "(dev)") && \
+	echo "building converge $$VERSION" && \
+	go build -v -trimpath -ldflags "-X main.version=$$VERSION" -o bin/converge
 
 .PHONY: build/compose
 ## builds resources
