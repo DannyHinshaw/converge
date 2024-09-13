@@ -1,11 +1,15 @@
+# OS generated
 .DS_Store
 
+# IDE's
 .idea/
 .ideavimrc
+.vscode/
 
+# Build
 bin/
+tmp/
 vendor/
 
-/tmp
-
+# Testing
 coverage.*

@@ -1,39 +1,81 @@
+// Package gonverge provides a tool for merging multiple Go files into one.
+// This is particularly useful for simplifying Go codebases by combining
+// related Go source files while preserving proper package structure and imports.
 package gonverge
 
 import (
 	"context"
 	"fmt"
 	"io"
+	"regexp"
 	"runtime"
 	"sync"
 
-	"github.com/dannyhinshaw/converge/internal/logger"
+	"github.com/dannyhinshaw/converge/internal/olog"
 )
 
-// GoFileConverger is a struct that converges multiple Go files into one.
-type GoFileConverger struct {
-	// MaxWorkers determines the maximum amount
-	// of file workers that will be created to
-	// process all files in the given directory.
-	MaxWorkers int
+// maxWorkers is the maximum amount of workers to use for processing files.
+const maxWorkers = 32
 
-	// Packages is a list of packages to include in the output.
-	// If empty, converger will default to top-level NON-TEST
-	// package in the given directory.
-	Packages []string
+// debugLogger represents a logger that only logs debug messages.
+type debugLogger interface {
+	// Debugf logs a formatted debug message.
+	Debugf(format string, v ...any)
 
-	// Excludes is a list of files to exclude from merging.
-	Excludes []string
+	// Debug logs a debug message.
+	Debug(v ...any)
 
-	// Logger is the logger to use for logging.
-	Logger logger.LevelLogger
+	// WithName returns a new logger with the given name.
+	WithName(name string) olog.LevelLogger
 }
 
-// NewGoFileConverger creates a new GoFileConverger with sensible defaults.
+// GoFileConverger is responsible for merging multiple Go source files
+// into a single file. It uses a worker pool to process files in parallel,
+// respecting exclusion patterns and logging progress. The result is a single,
+// well-formatted Go file.
+type GoFileConverger struct {
+	// workers determines the maximum amount
+	// of file workers that will be created to
+	// process all files in the given directory.
+	workers int
+
+	// exclude is a map of regular expressions
+	// to apply to file names for exclusion.
+	exclude map[string]regexp.Regexp
+
+	// lg is the logger to use for logging.
+	lg debugLogger
+
+	// fpCh is the channel to send file paths to.
+	// fpCh is buffered so consumers can finish
+	// processing their files after the producer
+	// has closed the channel.
+	fpCh chan string
+
+	// resCh is the channel that delivers processed files.
+	resCh chan *goFile
+
+	// errCh is the channel that concurrent functions
+	// can send errors to for
+	errCh chan error
+}
+
+// NewGoFileConverger creates a new GoFileConverger with sensible defaults,
+// including a no-op logger. To enable logging, use the WithLogger option.
 func NewGoFileConverger(opts ...Option) *GoFileConverger {
+	// Upper limit of 32 workers.
+	workers := runtime.NumCPU()
+	if workers > maxWorkers {
+		workers = maxWorkers
+	}
+
 	gfc := GoFileConverger{
-		MaxWorkers: runtime.NumCPU(),
-		Logger:     &logger.NoopLogger{},
+		workers: workers,
+		exclude: make(map[string]regexp.Regexp),
+		fpCh:    make(chan string, workers),
+		resCh:   make(chan *goFile),
+		errCh:   make(chan error),
+		lg:      olog.NewNoopLogger(),
 	}
 
 	for _, opt := range opts {
@@ -43,41 +85,82 @@ func NewGoFileConverger(opts ...Option) *GoFileConverger {
 	return &gfc
 }
 
+// Option is a functional option for the GoFileConverger.
+type Option func(*GoFileConverger)
+
+// WithLogger sets the logger for the GoFileConverger.
+func WithLogger(lg debugLogger) Option {
+	return func(gfc *GoFileConverger) {
+		gfc.lg = lg
+	}
+}
+
+// WithExcludes allows the caller to specify a list of regular
+// expressions that define which files should be excluded from
+// the merging process. This is useful for excluding test files
+// or specific files in a directory.
+func WithExcludes(excludes []regexp.Regexp) Option {
+	return func(gfc *GoFileConverger) {
+		for _, e := range excludes {
+			gfc.exclude[e.String()] = e
+		}
+	}
+}
+
+// WithMaxWorkers sets the maximum amount of workers to use and
+// adjusts the file producer channel accordingly.
+func WithMaxWorkers(maxWorkers int) Option {
+	return func(gfc *GoFileConverger) {
+		gfc.workers = maxWorkers
+		gfc.fpCh = make(chan string, maxWorkers)
+	}
+}
+
 // ConvergeFiles converges all Go files in the given directory and
 // package into one and writes the result to the given output.
-func (gfc *GoFileConverger) ConvergeFiles(ctx context.Context, src string, w io.Writer) error {
-	// fpCh is buffered so consumers can finish
-	// processing their files after the producer
-	// has closed the channel.
-	fpCh := make(chan string, gfc.MaxWorkers)
-	resCh := make(chan *goFile)
-	errCh := make(chan error)
-	var wg sync.WaitGroup
+func (c *GoFileConverger) ConvergeFiles(ctx context.Context, dir string, w io.Writer) error {
+	var (
+		producerWG sync.WaitGroup
+		consumerWG sync.WaitGroup
+	)
+
+	lg := c.lg.WithName("ConvergeFiles")
 
 	// Start consumer worker pool
-	for i := 0; i < gfc.MaxWorkers; i++ {
-		wg.Add(1)
+	lg.Debugf("Starting %d consumer workers", c.workers)
+	for range c.workers {
+		consumerWG.Add(1)
 		go func() {
-			defer wg.Done()
-			consumer := newFileConsumer(fpCh, resCh, errCh)
+			defer consumerWG.Done()
+			consumer := newFileConsumer(c.fpCh, c.resCh, c.errCh)
 			consumer.consume(ctx)
 		}()
 	}
 
 	// Setup and start producer
-	producer := newFileProducer(gfc.Logger, gfc.Excludes, gfc.Packages, fpCh, errCh)
-	go producer.produce(src)
-
-	// Wait for all consumers to finish
-	// then close the results and errors channels.
-	// This will cause the buildFile function to return.
+	lg.Debugf("Producing files in directory: %s", dir)
+	producerWG.Add(1)
 	go func() {
-		wg.Wait()
-		close(resCh)
+		defer producerWG.Done()
+		defer close(c.fpCh) // Close only after producer is done
+
+		producer := newFileProducer(c.lg, c.exclude, c.fpCh, c.errCh)
+
+		c.lg.Debugf("Starting file producer for directory: %s", dir)
+		producer.produce(dir)
+	}()
+
+	// Wait for the producer and consumers
+	// to finish before closing channels
+	go func() {
+		producerWG.Wait()
+		consumerWG.Wait()
+		close(c.resCh)
+		close(c.errCh)
 	}()
 
 	// Build the Go file from the results.
-	outFile, err := gfc.buildFile(ctx, errCh, resCh)
+	outFile, err := c.buildFile(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to buildFile file converger: %w", err)
 	}
@@ -98,18 +181,18 @@ func (gfc *GoFileConverger) ConvergeFiles(ctx context.Context, src string, w io.
 }
 
 // buildFile handles running the converger and returning the result or an error.
-func (gfc *GoFileConverger) buildFile(ctx context.Context, errCh <-chan error, resCh <-chan *goFile) (*goFile, error) {
+func (c *GoFileConverger) buildFile(ctx context.Context) (*goFile, error) {
 	gf := newGoFile()
 	for {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case err, ok := <-errCh:
+		case err, ok := <-c.errCh:
 			if !ok {
 				return gf, nil
 			}
 			return nil, err
-		case f, ok := <-resCh:
+		case f, ok := <-c.resCh:
 			if !ok {
 				return gf, nil
 			}

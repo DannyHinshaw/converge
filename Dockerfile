@@ -1,48 +1,39 @@
-# When `docker compose` commands are ran,
-# these "_VERSION" ARGS are populated by
-# the .env file in the root directory, and
-# made available at image build time by the
-# service.build.args fields set in the
-# compose.yaml file.
-ARG ALPINE_IMAGE_VERSION
-ARG GOLANG_IMAGE_VERSION
+# ARGs provide default versions for base images and tooling used in this multi-stage build.
+# These values are primarily defined in the root .env file for consistency across builds.
+# If no value is passed during build, these defaults will be used.
+ARG ALPINE_IMAGE
+ARG GOLANG_IMAGE
 ARG GOFUMPT_VERSION
 ARG GOLANGCI_LINT_VERSION
 ARG PKGSITE_VERSION
 
 # Create pinned alpine base image
-ARG ALPINE_IMAGE_VERSION
-FROM $ALPINE_IMAGE_VERSION as alpine-builder
+FROM ${ALPINE_IMAGE} AS alpine-builder
 
 # Create pinned golang base image
-ARG GOLANG_IMAGE_VERSION
-FROM $GOLANG_IMAGE_VERSION as golang-builder
+FROM ${GOLANG_IMAGE} AS golang-builder
+RUN apk add --no-cache git gcc musl-dev
 
-# gofumpt used for stricter gofmt code formatting.
-FROM alpine-builder as gofumpt
+# gofumpt stage: used for stricter Go code formatting, an extension of gofmt.
+FROM golang-builder AS gofumpt
 ARG GOFUMPT_VERSION
-RUN wget -nv -O /bin/gofumpt \
-    https://github.com/mvdan/gofumpt/releases/download/$GOFUMPT_VERSION/gofumpt_${GOFUMPT_VERSION}_linux_arm64 \
-    && chmod +x /bin/gofumpt
+RUN go install mvdan.cc/gofumpt@$GOFUMPT_VERSION
 
-# golangci-lint is used for Go code linting.
-FROM alpine-builder as golangci
+# golangci-lint stage: used for linting Go code, pulled from the official repository.
+FROM alpine-builder AS golangci
 ARG GOLANGCI_LINT_VERSION
+# Download and install golangci-lint using the official install script (recommended).
 RUN wget -nv -O - https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
     | sh -s $GOLANGCI_LINT_VERSION
 
-# pkgsite is used for generating the pkg.go.dev site.
-FROM golang-builder as pkgsite
+# pkgsite stage: used to generate documentation for Go packages.
+FROM golang-builder AS pkgsite
 ARG PKGSITE_VERSION
 RUN go install golang.org/x/pkgsite/cmd/pkgsite@$PKGSITE_VERSION
 
 # tools target stage contains all tool binaries from the preceeding build stages.
 FROM golang-builder as tools
-
-RUN apk add --no-cache gcc musl-dev
-
-COPY --from=gofumpt /bin/gofumpt /usr/bin
+COPY --from=gofumpt /go/bin/gofumpt /usr/bin
 COPY --from=golangci /bin/golangci-lint /usr/bin
 COPY --from=pkgsite /go/bin/pkgsite /usr/bin
-
 WORKDIR /workspace

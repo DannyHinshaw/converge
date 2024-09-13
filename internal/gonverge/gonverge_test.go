@@ -5,108 +5,113 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/dannyhinshaw/converge/internal/gonverge"
 )
 
 func TestGoFileConverger_ConvergeFiles(t *testing.T) {
-	// Define test cases
+	a := assert.New(t)
+
+	excludeRe := regexp.MustCompile("exclude.go")
+
 	tests := map[string]struct {
-		setup    func() (string, func())
+		files    map[string]string
+		excludes []regexp.Regexp
 		expected string
-		excludes []string
 		err      bool
 	}{
 		"EmptyDirectory": {
-			setup: func() (string, func()) {
-				dir := createTempDirWithFiles(t, map[string]string{})
-				return dir, func() { os.RemoveAll(dir) }
-			},
+			files:    nil,
 			expected: "",
-			err:      false,
 		},
 		"SingleFile": {
-			setup: func() (string, func()) {
-				files := map[string]string{"file.go": "package main\nfunc main() {}"}
-				dir := createTempDirWithFiles(t, files)
-				return dir, func() { os.RemoveAll(dir) }
+			files: map[string]string{
+				"file.go": "package main\nfunc main() {}",
 			},
 			expected: "package main\n\nfunc main() {}\n",
-			err:      false,
 		},
 		"MultipleFiles": {
-			setup: func() (string, func()) {
-				files := map[string]string{
-					"file1.go": "package main\nfunc func1() {}",
-					"file2.go": "package main\nfunc func2() {}",
-				}
-				dir := createTempDirWithFiles(t, files)
-				return dir, func() { os.RemoveAll(dir) }
+			files: map[string]string{
+				"file1.go": "package main\nfunc func1() {}",
+				"file2.go": "package main\nfunc func2() {}",
 			},
 			expected: "package main\n\nfunc func1() {}\nfunc func2() {}\n",
-			err:      false,
 		},
 		"MultipleFilesWithExclusion": {
-			setup: func() (string, func()) {
-				files := map[string]string{
-					"file1.go":   "package main\nfunc func1() {}",
-					"file2.go":   "package main\nfunc func2() {}",
-					"exclude.go": "package main\nfunc exclude() {}",
-				}
-				dir := createTempDirWithFiles(t, files)
-				return dir, func() { os.RemoveAll(dir) }
+			files: map[string]string{
+				"file1.go":   "package main\nfunc func1() {}",
+				"file2.go":   "package main\nfunc func2() {}",
+				"exclude.go": "package main\nfunc exclude() {}",
 			},
 			expected: "package main\n\nfunc func1() {}\nfunc func2() {}\n",
-			excludes: []string{"exclude.go"},
-			err:      false,
+			excludes: []regexp.Regexp{*excludeRe},
 		},
 		"MultipleFilesWithExclusionButNoFile": {
-			setup: func() (string, func()) {
-				files := map[string]string{
-					"file1.go": "package main\nfunc func1() {}",
-					"file2.go": "package main\nfunc func2() {}",
-				}
-				dir := createTempDirWithFiles(t, files)
-				return dir, func() { os.RemoveAll(dir) }
+			files: map[string]string{
+				"file1.go": "package main\nfunc func1() {}",
+				"file2.go": "package main\nfunc func2() {}",
 			},
 			expected: "package main\n\nfunc func1() {}\nfunc func2() {}\n",
-			excludes: []string{"exclude.go"},
-			err:      false,
+			excludes: []regexp.Regexp{*excludeRe},
+		},
+		"MultipleFilesWithNonGoFiles": {
+			files: map[string]string{
+				"file1.go": "package main\nfunc func1() {}",
+				"file.txt": "This is a text file",
+				"file2.go": "package main\nfunc func2() {}",
+			},
+			expected: "package main\n\nfunc func1() {}\nfunc func2() {}\n",
 		},
 	}
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			dir, cleanup := tc.setup()
-			defer cleanup()
+			dir := createTempDirWithFiles(t, tc.files)
+			defer func() {
+				if err := os.RemoveAll(dir); err != nil {
+					t.Fatalf("Failed to remove temp dir: %v", err)
+				}
+			}()
 
+			// Use only one worker to make the test deterministic.
 			opts := []gonverge.Option{
 				gonverge.WithMaxWorkers(1),
 			}
-
 			if len(tc.excludes) > 0 {
 				opts = append(opts, gonverge.WithExcludes(tc.excludes))
 			}
-
-			converger := gonverge.NewGoFileConverger(opts...)
+			converger := gonverge.NewGoFileConverger(
+				opts...,
+			)
 
 			var output bytes.Buffer
-			err := converger.ConvergeFiles(context.Background(), dir, &output)
-			if tc.err && err == nil {
-				t.Fatalf("ConvergeFiles() error = %v, wantErr %v", err, tc.err)
-			}
 
-			if got := output.String(); got != tc.expected {
-				t.Errorf("ConvergeFiles() got = %v, want %v", got, tc.expected)
-			}
+			err := converger.ConvergeFiles(context.Background(), dir, &output)
+			a.False(tc.err && err == nil)
+			a.Equal(tc.expected, output.String())
 		})
 	}
+}
+
+func TestGoFileConverger_DirectoryNotFound(t *testing.T) {
+	a := assert.New(t)
+
+	dir := "/non-existent-directory"
+	converger := gonverge.NewGoFileConverger()
+
+	var output bytes.Buffer
+	err := converger.ConvergeFiles(context.Background(), dir, &output)
+	a.Error(err)
 }
 
 // createTempDirWithFiles creates a temporary directory with the given files for testing.
 func createTempDirWithFiles(t *testing.T, files map[string]string) string {
 	t.Helper()
+
 	dir, err := os.MkdirTemp("", "gonverge_test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
