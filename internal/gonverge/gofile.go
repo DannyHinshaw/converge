@@ -1,14 +1,19 @@
 package gonverge
 
 import (
+	"fmt"
 	"go/format"
 	"strings"
 )
 
-// goFile is structure that holds the contents of a Go file,
-// and can be used to generate a new Go file.
+// goFile represents the contents of a Go source file,
+// including its package name, imports, and code.
+//
+// This struct is used to aggregate multiple Go files into
+// a single file, maintaining proper syntax and formatting.
 type goFile struct {
-	// pkgName is the name of the package that the file belongs to.
+	// pkgName is the name of the package
+	// that the file belongs to.
 	pkgName string
 
 	// imports is a set of all imports for the file.
@@ -25,12 +30,15 @@ func newGoFile() *goFile {
 	}
 }
 
-// addImport adds the given import to the set of imports.
+// addImport adds the given import to the set of imports,
+// ensuring no duplicate imports are added. This is important
+// when merging multiple Go files that may have overlapping dependencies.
 func (f *goFile) addImport(importLine string) {
 	f.imports[importLine] = struct{}{}
 }
 
-// appendCode appends the literal code to the code block.
+// appendCode adds a line of Go code to the current file. Each
+// line is appended with a newline character to maintain proper syntax.
 func (f *goFile) appendCode(code string) {
 	f.code.WriteString(code)
 	f.code.WriteString("\n")
@@ -79,16 +87,31 @@ func (f *goFile) buildImports() string {
 
 // FormatCode formats the code in the goFile and returns the result.
 func (f *goFile) FormatCode() ([]byte, error) {
+	// Use a strings.Builder to build
+	// the newly converged Go file.
 	var builder strings.Builder
+
+	// Write the package name.
 	builder.WriteString("package ")
 	builder.WriteString(f.pkgName)
 	builder.WriteString("\n\n")
+
+	// Write the imports.
 	if len(f.imports) > 0 {
 		imports := f.buildImports()
 		builder.WriteString(imports)
 	}
+
+	// Write the code.
 	builder.WriteString(f.code.String())
 
 	// Use go/format to format the code in standard gofmt style.
-	return format.Source([]byte(builder.String()))
+	// Note(@danny): We should also allow the user to specify
+	// using gofumpt or other formatters.
+	b, err := format.Source([]byte(builder.String()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to format code: %w", err)
+	}
+
+	return b, nil
 }

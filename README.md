@@ -13,7 +13,6 @@ files is beneficial.
 - Efficiently merges multiple Go source files from a specified directory into a single consolidated file.
 - Allows exclusion of specific files from the merging process.
 - Supports an optional timeout setting for the merge operation.
-- Employs a configurable worker pool for enhanced concurrency management.
 
 ## Installation
 
@@ -31,43 +30,24 @@ go install github.com/dannyhinshaw/converge
 
 ## Usage
 
-Run Converge with the command below, specifying the source directory
-and (optionally) the output file:
+Reference the `help` command for detailed usage instructions:
 
 ```bash
-converge <source-directory> --file=<output-file>
+converge --help
 ```
-
-## Options
-
-    -f, --file          Path to the output file where the merged content will be written;
-                        defaults to stdout if not specified.
-    -v                  Enable verbose logging for debugging purposes.
-    -h, --help          Show this help message and exit.
-    --version           Show version information.
-    -t, --timeout       Maximum time (in seconds) before cancelling the merge operation;
-                        if not specified, the command runs until completion.
-    -w, --workers       Maximum number of concurrent workers in the worker pool.
-    -e, --exclude       Comma-separated list of filenames to exclude from merging.
 
 ## Example
 
 To merge all Go files in the 'src' directory into 'merged.go':
 
 ```bash
-converge ./src --file=./merged.go
+converge --dir=./src --output=./merged.go
 ```
 
 To merge all Go files in the 'src' directory and pipe to clipboard:
 
 ```bash
-converge ./src | pbcopy
-```
-
-For more detailed usage instructions, refer to the tool's help message:
-
-```bash
-converge --help
+converge --dir=./src | pbcopy
 ```
 
 ## License

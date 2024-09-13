@@ -3,32 +3,22 @@ package gonverge
 import (
 	"context"
 	"fmt"
-	"go/parser"
-	"go/token"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
-
-	"github.com/dannyhinshaw/converge/internal/logger"
 )
 
 // fileProducer walks a directory and sends all file paths
 // to the given channel for the consumer to process.
 type fileProducer struct {
-	// excludes is a map of files to exclude from processing.
-
+	// excludes is a map of regular expressions
+	// to apply to file names for exclusion.
 	excludes map[string]regexp.Regexp
 
-	// packages is a set of packages to include
-	// in the output. If empty, converger will
-	// default to top-level NON-TEST package in
-	// the given directory.
-	packages map[string]struct{}
-
-	// log is the logger to use for logging.
-	log logger.LevelLogger
+	// lg is the lg to use for logging.
+	lg debugLogger
 
 	// fpCh is the channel to send file paths to.
 	fpCh chan<- string
@@ -37,52 +27,34 @@ type fileProducer struct {
 	errCh chan<- error
 }
 
-// newFileProducer returns a new fileProducer.
-func newFileProducer(ll logger.LevelLogger, excludes []string,
-	packages []string, fpCh chan<- string, errCh chan<- error) *fileProducer {
-	ll = ll.WithGroup("file_producer")
-
-	packageSet := make(map[string]struct{}, len(packages))
-	for _, pkg := range packages {
-		packageSet[pkg] = struct{}{}
-	}
-
-	excludeSet := make(map[string]regexp.Regexp)
-	for _, exclude := range excludes {
-		if exclude == "" {
-			continue
-		}
-		if _, ok := excludeSet[exclude]; ok {
-			continue
-		}
-
-		re, err := regexp.Compile(exclude)
-		if err != nil {
-			errCh <- fmt.Errorf("error compiling exclude regex: %w", err)
-			continue
-		}
-		if re == nil {
-			errCh <- fmt.Errorf("error compiling exclude regex: regex is nil")
-			continue
-		}
-		excludeSet[exclude] = *re
-	}
-
+// newFileProducer handles the creation of a new fileProducer.
+func newFileProducer(lg debugLogger, ex map[string]regexp.Regexp, fc chan<- string, ec chan<- error) *fileProducer {
 	return &fileProducer{
-		log:      ll,
-		fpCh:     fpCh,
-		errCh:    errCh,
-		excludes: excludeSet,
-		packages: packageSet,
+		lg:       lg,
+		fpCh:     fc,
+		errCh:    ec,
+		excludes: ex,
 	}
 }
 
 // produce walks the given directory and sends all file paths
 // to the fpCh channel for the consumer to process.
 func (fp *fileProducer) produce(dir string) {
-	defer close(fp.fpCh)
+	lg := fp.lg.WithName("walkDir")
+	lg.Debug("Producing files in directory:", dir)
 
-	err := fs.WalkDir(os.DirFS(dir), ".", func(path string, d fs.DirEntry, err error) error {
+	if err := fp.walkDir(dir); err != nil {
+		fp.errCh <- fmt.Errorf("error walking directory: %w", err)
+	}
+}
+
+// walkDir walks the given directory and sends all file paths
+// to the fpCh channel for the consumer to process.
+func (fp *fileProducer) walkDir(dir string) error {
+	lg := fp.lg.WithName("walkDir")
+	lg.Debug("Walking directory:", dir)
+
+	return fs.WalkDir(os.DirFS(dir), ".", func(path string, d fs.DirEntry, err error) error { //nolint:wrapcheck // Low level error doesn't need wrapped any further.
 		if err != nil {
 			return fmt.Errorf("error walking directory: %w", err)
 		}
@@ -97,76 +69,40 @@ func (fp *fileProducer) produce(dir string) {
 
 		fullPath := filepath.Join(dir, path)
 		if !fp.validFile(info.Name(), fullPath) {
-			fp.log.Info("file is not valid", "fullPath", fullPath)
+			lg.Debug("file path is not valid:", fullPath)
 			return nil
 		}
 
-		fp.log.Info("file is valid", "fullPath", fullPath)
+		lg.Debug("file path is valid:", fullPath)
 		fp.fpCh <- fullPath
 
 		return nil
 	})
-	if err != nil {
-		fp.errCh <- err
-	}
 }
 
 // validFile checks that the file is a valid *non-test* Go file.
+// If the pkgSet is empty, it will default to the top-level
+// Go files that are *not* test files.
+//
+// However, if the pkgSet is not empty, it will include all
+// files that have a package name that is in the set.
+// This behavior essentially allows for the user to specify
+// the package names they want to include, including test files
+// with the package name in the set.
 func (fp *fileProducer) validFile(name, fullPath string) bool {
-	checkPkgs := len(fp.packages) > 0
+	lg := fp.lg.WithName("validFile")
+	lg.Debugf("Validating package %s at: %s", name, fullPath)
 
-	// Check if the file should be excluded from processing.
-	for _, re := range fp.excludes {
-		if re.MatchString(name) {
-			fp.log.Info("file %s excluded from processing", name)
-			return false
-		}
-	}
-
-	// Packages specified overrides all other checks.
-	if checkPkgs {
-		if fp.validPackage(fullPath) {
-			fp.log.Info("file is valid package", "name", name)
-			return true
-		}
-		return false
-	}
-
-	// Only process Go files
 	if !strings.HasSuffix(name, ".go") {
 		return false
 	}
 
-	// Ignore test files by default.
-	// NOTE: If you need to converge test files, you can
-	// do so by specifying the package name in the packages
-	// option. This will override the default behavior.
-	if strings.HasSuffix(name, "_test.go") {
-		return false
-	}
-
-	return true
-}
-
-// validPackage checks that the file is a valid Go file and that
-// the package name is in the set of packages to include.
-func (fp *fileProducer) validPackage(fullPath string) bool {
-	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, fullPath, nil, parser.PackageClauseOnly)
-	if err != nil {
-		fp.log.Info("error parsing file %s: %v", fullPath, err)
-		return false
-	}
-
-	if node == nil || node.Name == nil {
-		fp.log.Info("error parsing file %s: %v", fullPath, err)
-		return false
-	}
-
-	name := node.Name.Name
-	if _, ok := fp.packages[name]; !ok {
-		fp.log.Info("package not in packages set", "name", name, "set", fp.packages)
-		return false
+	// Check if the file should be excluded from processing.
+	for _, re := range fp.excludes {
+		if re.MatchString(name) {
+			lg.Debug("File excluded from processing:", name)
+			return false
+		}
 	}
 
 	return true
@@ -187,11 +123,11 @@ type fileConsumer struct {
 }
 
 // newFileConsumer returns a new fileConsumer.
-func newFileConsumer(fpCh <-chan string, resCh chan<- *goFile, errCh chan error) *fileConsumer {
+func newFileConsumer(fc <-chan string, rc chan<- *goFile, ec chan error) *fileConsumer {
 	return &fileConsumer{
-		fpCh:  fpCh,
-		resCh: resCh,
-		errCh: errCh,
+		fpCh:  fc,
+		resCh: rc,
+		errCh: ec,
 	}
 }
 
@@ -213,13 +149,28 @@ func (fc *fileConsumer) consume(ctx context.Context) {
 			if !ok {
 				return
 			}
-			proc := newFileProcessor(fp)
-			res, err := proc.process()
+			res, err := fc.processFile(fp)
 			if err != nil {
-				fc.errCh <- fmt.Errorf("error processing file: %w", err)
+				fc.errCh <- err
 				return
 			}
 			fc.resCh <- res
 		}
 	}
+}
+
+// processFile processes the given file path and returns the
+// processed result or an error if one occurred.
+func (fc *fileConsumer) processFile(fp string) (*goFile, error) {
+	proc := newFileProcessor(fp)
+	if proc == nil {
+		return nil, fmt.Errorf("failed to create fileProcessor for file: %s", fp)
+	}
+
+	res, err := proc.process()
+	if err != nil {
+		return nil, fmt.Errorf("error processing file: %w", err)
+	}
+
+	return res, nil
 }

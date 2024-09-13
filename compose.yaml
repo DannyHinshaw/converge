@@ -1,13 +1,13 @@
 services:
   tools:
-    container_name: tools
-    image: img/tools:latest
+    container_name: converge_tools
+    image: img/converge-tools
     build:
       context: .
       dockerfile: Dockerfile
       args:
-        ALPINE_IMAGE_VERSION: $ALPINE_IMAGE_VERSION
-        GOLANG_IMAGE_VERSION: $GOLANG_IMAGE_VERSION
+        ALPINE_IMAGE: $ALPINE_IMAGE
+        GOLANG_IMAGE: $GOLANG_IMAGE
         GOFUMPT_VERSION: $GOFUMPT_VERSION
         GOLANGCI_LINT_VERSION: $GOLANGCI_LINT_VERSION
         PKGSITE_VERSION: $PKGSITE_VERSION
@@ -15,11 +15,11 @@ services:
       - "3030:3030"
     volumes:
       - ./:/workspace
-      - go-cache:/go/.cache
+      - go_cache:/go/.cache
       - $GOPATH/pkg/mod:/go/pkg/mod
 
 volumes:
-  go-cache:
+  go_cache:
 
 networks:
   tools:

@@ -1,0 +1,25 @@
+name: Go Lint
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  golangci:
+    name: golangci-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      - uses: falti/dotenv-action@v1.1.2
+        id: dotenv
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: ${{ steps.dotenv.outputs.GOLANGCI_LINT_VERSION }}
+          args: --timeout 5m

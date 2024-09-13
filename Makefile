@@ -1,8 +1,15 @@
+# /////////////////////////////////////////////////////////////
+#                            Makefile
+# \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
 # Set the default command of the Makefile to be
 # the "help" command (printing the command docs).
 # So the following commands will both print the docs:
 # `make` and `make help`.
 .DEFAULT_GOAL := help
+
+# Set the name of the app
+APP_NAME := converge
 
 # COMPOSE contains the base Docker Compose command for running various
 # binaries in the tools Compose service as ephemeral containers.
@@ -18,11 +25,6 @@ COMPOSE = docker compose
 # (and manage) them on your machine. There are simply too many variables
 # at play with developer machines to ensure consistency across all engineering.
 TOOLS ?= $(COMPOSE) run --rm --service-ports tools
-
-# CGO contains the base Docker Compose command for
-# running various Go tools in the tools Compose service
-# as ephemeral containers with CGO_ENABLED=1.
-CGO ?= $(COMPOSE) run --rm --service-ports -e CGO_ENABLED=1 tools go
 
 # GOFUMPT contains the base Go command for running gofumpt
 # defaulting to running it in the tools container.
@@ -47,16 +49,12 @@ GO ?= $(TOOLS) go
 # It can be overridden by setting the GOTEST environment variable.
 GOTEST ?= $(GO) test
 
-# CGOTEST contains the base Go command for running tests with CGO_ENABLED=1.
-# It can be overridden by setting the CGOTEST environment variable.
-CGOTEST ?= $(CGO) test
-
 # GOVET contains the base Go command for running go vet.
 # It can be overridden by setting the GOVET environment variable.
 GOVET ?= $(GO) vet
 
-# TEST_TIMEOUT contains the default timeout value for running tests.
-TEST_TIMEOUT =- timeout 1m
+# Set and export the $GOPATH env var if not already set.
+export GOPATH ?= $(shell go env GOPATH)
 
 ###################
 #   Main Targets  #
@@ -64,7 +62,7 @@ TEST_TIMEOUT =- timeout 1m
 
 .PHONY: all
 ## runs all the things
-all: build verify test
+all: tidy fmt/fix verify build/cli test/full
 
 .PHONY: deps
 ## checks to make sure all general are present on the machine for use in other make targets
@@ -80,31 +78,29 @@ deps:
 	  exit 1; \
   	else \
   	  go mod download; \
-	  echo "Make: all dependencies installed... nice."; \
   	fi
 
 .PHONY: build
 ## builds all binaries/images
-build: build/cli build/compose
-	@echo "Make: building binaries and resources..."
+build: build/cli compose/build
 
 .PHONY: build/cli
 ## builds the converge CLI binary
 build/cli:
 	@mkdir -p bin
-	@VERSION=$$(git describe --tags --always || echo "(dev)") && \
-	echo "building converge $$VERSION" && \
-	go build -v -trimpath -ldflags "-X main.version=$$VERSION" -o bin/converge
+	@VERSION=$$(git describe --tags --always || echo "(dev)") \
+		&& echo "building $(APP_NAME) $$VERSION" \
+		&& go build -v -trimpath -ldflags "-X main.version=$$VERSION" -o bin/$(APP_NAME)
 
-.PHONY: build/compose
+.PHONY: compose/build
 ## builds resources
-build/compose: deps
-	$(COMPOSE) build --no-cache
+compose/build: deps
+	@$(COMPOSE) build --no-cache
 
 .PHONY: compose/clean
 ## cleans up resources
 compose/clean:
-	$(COMPOSE) down --rmi=all --remove-orphans --volumes
+	@$(COMPOSE) down --rmi=all --remove-orphans --volumes
 
 ########################
 #    Linting/Verify    #
@@ -117,12 +113,12 @@ verify: lint vet
 .PHONY: lint
 ## runs all code linters
 lint:
-	$(GOLINT) run
+	@$(GOLINT) run
 
 .PHONY: vet
 ## runs go vet on all source files
 vet:
-	$(GOVET) ./...
+	@$(GOVET) ./...
 
 ################
 #    Format    #
@@ -131,47 +127,50 @@ vet:
 .PHONY: fmt/check
 ## checks code formatting on all source files and errors if bad formatting is detected
 fmt/check:
-	$(GOFUMPT) -extra -d .
+	@$(GOFUMPT) -extra -d .
 
 .PHONY: fmt/fix
 ## runs gofumpt code formatter on all source files and fixes any formatting issues
 fmt/fix:
-	$(GOFUMPT) -extra -l -w .
+	@$(GOFUMPT) -extra -l -w .
 
 ################
 #     Test     #
 ################
 
+# Default to running tests with the -race flag enabled,
+# but allow the user to disable it by setting the RACE
+# environment variable to false. e.g.: `RACE=false make test`
+RACE ?= true
+RACE_FLAG := $(if $(filter true,$(RACE)),-race,)
+TEST_FLAGS := -v -timeout 1m
+COVER_FLAGS :=
+
 .PHONY: test
-## runs all Go unit tests
+## runs all the Go unit tests in the repo
 test:
-	$(GOTEST) -v ./...
+	@$(GOTEST) $(RACE_FLAG) $(TEST_FLAGS) $(COVER_FLAGS) ./...
 
 .PHONY: test/cover
 ## runs all the tests with coverage enabled
-test/cover:
-	$(GOTEST) -v ./... -coverprofile=coverage.out -covermode=atomic
-
-.PHONY: test/cover/html
-## runs all the tests with coverage enabled and opens the coverage report in the browser
-test/cover/html: test/cover
-	$(GO) tool cover -html=coverage.out -o coverage.html
-	@open coverage.html
-
-.PHONY: test/race
-## runs all tests with the race detector enabled
-test/race:
-	$(CGOTEST) -v -race ./...
+test/cover: COVER_FLAGS = -coverprofile=coverage.out -covermode=atomic
+test/cover: test
 
 .PHONY: test/full
-## runs all the tests with coverage and race detector enabled
-test/full:
-	$(CGOTEST) -v -race ./... -coverprofile=coverage.out -covermode=atomic
+## runs all the tests with coverage enabled and opens the coverage report in the browser
+test/full: test/cover
+	@$(GO) tool cover -html=coverage.out -o coverage.html
+	@open coverage.html
 
 
 ################
 #   Release    #
 ################
+
+.PHONY: tidy
+## runs go mod tidy
+tidy:
+	@$(GO) mod tidy
 
 .PHONY: release
 ## Issues a new release with git tag. Example usage: make release VERSION=v1.0.0
@@ -184,6 +183,7 @@ release:
 	git tag $(VERSION)
 	git push origin $(VERSION)
 
+
 ################
 #     Halp     #
 ################
@@ -193,7 +193,7 @@ release:
 docs:
 	@echo "once server is running, visit the following url in your browser:"
 	@echo "http://localhost:3030"
-	$(PKGSITE) -http=0.0.0.0:3030
+	@$(PKGSITE) -http=0.0.0.0:3030
 
 .PHONY: help
 ## prints out the help documentation (also will be printed by simply running `make` command with no arg)

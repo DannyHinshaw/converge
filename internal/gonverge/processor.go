@@ -22,7 +22,7 @@ const (
 
 const (
 	// tokenPkgDecl is the token for a package declaration line.
-	tokenPkgDecl string = `package `
+	tokenPkgDecl = `package `
 
 	// tokenImport is the token for import declarations.
 	tokenImport = `import`
@@ -52,6 +52,7 @@ type fileProcessor struct {
 func newFileProcessor(filePath string) *fileProcessor {
 	return &fileProcessor{
 		filePath: filePath,
+		state:    procStateCoding,
 	}
 }
 
@@ -70,23 +71,30 @@ func (p *fileProcessor) process() (*goFile, error) {
 		case strings.HasPrefix(line, tokenPkgDecl):
 			res.pkgName = strings.TrimPrefix(line, tokenPkgDecl)
 			p.state = procStateCoding
+
 		case strings.HasPrefix(line, tokenImportMultiStart):
 			p.state = procStateImporting
+
 		case strings.HasPrefix(line, tokenImportMono):
 			res.addImport(strings.TrimPrefix(line, tokenImport))
+
 		case p.importing() && strings.HasSuffix(line, tokenImportMultiFinish):
 			p.state = procStateCoding
+
 		case p.importing():
 			if line == "" {
 				continue
 			}
 			res.addImport(line)
+
 		case p.coding():
 			res.appendCode(line)
+
 		default:
 			res.appendCode(line)
 		}
 	}
+
 	if err = scanner.Err(); err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
