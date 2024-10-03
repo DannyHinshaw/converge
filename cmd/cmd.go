@@ -103,8 +103,8 @@ func bindFlags(c *cobra.Command, rootCmd *cmd) {
 		"The directory containing Go files to merge",
 	)
 	fs.StringVarP(&rootCmd.outfile,
-		"output", "o", "./converged.go",
-		"File to write the merged Go code",
+		"output", "o", "",
+		"File to write the merged Go code (default: stdout)",
 	)
 	fs.StringSliceVarP(&rootCmd.exclude,
 		"exclude", "e", nil,
